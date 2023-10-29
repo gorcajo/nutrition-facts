@@ -43,12 +43,12 @@ def read_data() -> list[NutritionFacts]:
     list_template_body_template: str = read_request_template(LIST_TEMPLATE_BODY_PATH)
     detail_template_body_template: str = read_request_template(DETAIL_TEMPLATE_BODY_PATH)
 
-    food_ids_and_names: list[tuple[int, str]] = get_all_food_ids_and_names(list_template_body_template)
+    food_ids_and_names: list[tuple[int, str]] = list_foods(list_template_body_template)
 
     all_nutrition_facts: list[NutritionFacts] = []
 
     for food_id, food_name in food_ids_and_names:
-        nutrition_facts: NutritionFacts | None = get_nutrition_facts_for_food_id(detail_template_body_template, food_id, food_name)
+        nutrition_facts: NutritionFacts | None = get_nutrition_facts(detail_template_body_template, food_id, food_name)
 
         if nutrition_facts is None:
             continue
@@ -63,7 +63,7 @@ def read_request_template(request_template_path: str) -> str:
         return list_request_template_file.read()
 
 
-def get_all_food_ids_and_names(request_body_template: str) -> list[tuple[int, str]]:
+def list_foods(request_body_template: str) -> list[tuple[int, str]]:
     food_ids_and_names: list[tuple[int, str]] = []
 
     for letter in ALPHABET:
@@ -91,7 +91,7 @@ def get_all_food_ids_and_names(request_body_template: str) -> list[tuple[int, st
     return food_ids_and_names
 
 
-def get_nutrition_facts_for_food_id(request_body_template: str, food_id: int, food_name: str) -> NutritionFacts | None:
+def get_nutrition_facts(request_body_template: str, food_id: int, food_name: str) -> NutritionFacts | None:
     logging.info(f'Getting nutrition facts for food "{food_name}"')
 
     response = requests.post(
@@ -109,7 +109,7 @@ def get_nutrition_facts_for_food_id(request_body_template: str, food_id: int, fo
         return None
 
     name: str = food.find('f_ori_name').string
-    calories: float = 0.0
+    energy: float = 0.0
     fat: float = 0.0
     carbohydrate: float = 0.0
     protein: float = 0.0
@@ -121,17 +121,17 @@ def get_nutrition_facts_for_food_id(request_body_template: str, food_id: int, fo
         if value is None:
             continue
         elif eur_name == CALORIES_EUR_NAME:
-            calories = round(float(value) / 4.184, 2)
+            energy = round(float(value) / 4.184, 2)
         elif eur_name == FAT_EUR_NAME:
             fat = float(value)
-        elif eur_name == PROTEIN_EUR_NAME:
-            carbohydrate = float(value)
         elif eur_name == CARBOHYDRATE_EUR_NAME:
+            carbohydrate = float(value)
+        elif eur_name == PROTEIN_EUR_NAME:
             protein = float(value)
 
     return {
         'name': name,
-        'calories': calories,
+        'energy': energy,
         'fat': fat,
         'carbohydrate': carbohydrate,
         'protein': protein,
@@ -142,11 +142,13 @@ def write_data(data: list[NutritionFacts]) -> None:
     with open(OUTPUT_JSON_PATH, 'w') as output_json_file:
         output_json_file.write(json.dumps(data, separators=(',', ':')))
 
-    with open(OUTPUT_CSV_PATH, 'w') as output_csv_file:
-        output_csv_file.write(';'.join(data[0].keys()) + '\n')
+    with open(OUTPUT_CSV_PATH, 'w') as output_csv_file: 
+        keys: list[str] = list(data[0].keys())
+        output_csv_file.write(';'.join(keys) + '\n')
 
         for i, element in enumerate(data):
-            output_csv_file.write(';'.join([str(value) for value in element.values()]))
+            values: list = [element[key] for key in keys]
+            output_csv_file.write(';'.join([str(value) for value in values]))
 
             if i < len(data) - 1:
                 output_csv_file.write('\n')
